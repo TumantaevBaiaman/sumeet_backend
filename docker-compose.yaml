@@ -1,0 +1,60 @@
+version: '3.7'
+
+services:
+
+  redis:
+    image: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis:/data
+    command: ["sh", "-c", "exec redis-server --requirepass \"$REDIS_PASSWORD\""]
+    env_file:
+      - .env
+
+  sumeet_backend:
+    restart: always
+    build:
+      context: ./
+    ports:
+      - "8000:8000"
+    command: bash -c 'python3 manage.py makemigrations &&
+      python3 manage.py migrate &&
+      python3 manage.py runserver 0.0.0.0:8000'
+    depends_on:
+      - db
+    env_file:
+      - .env
+
+  worker:
+    restart: always
+    build:
+      context: ./
+    volumes:
+      - .:/consultation ./app/consultation
+    command: ['celery', '--workdir=.', '-A', 'sumeet_backend', 'worker']
+    env_file:
+      - .env
+
+  db:
+    image: postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+
+  bot:
+    build:
+      context: ./
+    command: bash -c 'python3 manage.py bot'
+      - sumeet_backend
+    env_file:
+      - .env
+
+volumes:
+  postgres_data:
+  redis:

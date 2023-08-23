@@ -1,0 +1,78 @@
+name: Code verification process
+
+on:
+  pull_request:
+    types: [ opened, edited, synchronize ]
+
+jobs:
+  python-black:
+    name: Start check code style
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+          cache: 'pip'
+
+      - name: Install Dependencies
+        working-directory: .
+        run: |
+          python -m pip install --upgrade pip
+          pip install black==23.1.0
+
+      - name: Run Check code style
+        working-directory: .
+        run: |
+          black . --line-length=119 --check --verbose
+
+  run-tests:
+    name: Start tests
+    runs-on: ubuntu-latest
+    container: python:3.9
+    env:
+      POSTGRES_ENGINE: "django.db.backends.postgresql"
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ${{env.POSTGRES_USER}}
+          POSTGRES_DB: ${{env.POSTGRES_DB}}
+          POSTGRES_PASSWORD: ${{env.POSTGRES_PASSWORD}}
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:5.0
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Dependencies
+        working-directory: .
+        run: pip install -r requirements.txt
+
+      - name: Run Tests
+        working-directory: .
+        run: pytest -vvv
